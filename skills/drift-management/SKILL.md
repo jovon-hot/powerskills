@@ -1,7 +1,7 @@
 ---
 name: drift-management
-description: Use when 检测/分析/对齐/修复信息漂移（副本不同步/快照过期/口径不一致）。
-version: 1.0.0
+description: Use when 检测/分析/对齐/修复信息漂移（副本不同步/快照过期/口径不一致）。零配置自动探测。
+version: 2.0.0
 author: powerskills
 platforms: [macos, linux]
 tags: [drift, sync, alignment, governance, multi-agent]
@@ -10,7 +10,7 @@ tags: [drift, sync, alignment, governance, multi-agent]
 # 漂移管理（发现→分析→对齐→修复）
 
 > 通用方法论：任何多角色/多节点/多副本的信息体系，如何系统性地发现、分析、对齐、修复漂移。
-> 不绑定具体平台、角色数量、目录结构——你用自己的环境套用。
+> **零配置**：脚本自动探测环境，agent 自动判断，无需用户手动适配。
 
 ## 触发场景
 
@@ -31,24 +31,28 @@ tags: [drift, sync, alignment, governance, multi-agent]
 | 语义认知 | 各节点对"事实"的理解漂移 | 事实进单一数据源 + 唯一写入口 |
 | 数据口径 | 多数据源天然口径不同 | 视图/口径固化 + 交叉校验 |
 
-## 工作流（发现→分析→对齐→修复）
+## 工作流（agent 自动执行，零用户操作）
 
-### 第 1 步：发现（脚本巡检）
-
-先按你的环境配置巡检脚本（见 `scripts/drift_check.py` 顶部配置区）：
-- `PROFILES`：你的所有节点/角色目录名
-- `AUTHORITY`：权威源目录（唯一物理位置）
+### 第 1 步：发现（自动探测）
 
 ```bash
 python3 scripts/drift_check.py
 ```
 
-输出 JSON，四类检查：
-- `file_drift`：各节点文件软链状态（实体副本 = 风险）+ 实体内容与权威版本差异
-- `job_drift`：任务配置快照与全局配置不匹配（静默跳过风险）
-- `memory_copy`：节点记忆含明细副本（需确认是指向还是副本）
+**零参数、零配置**。脚本自动：
+1. 扫描 profiles 目录发现所有节点
+2. 统计各节点实体共享文件数，输出**候选权威源**（top5）
+3. 对比各节点与权威源的软链/实体状态 + 内容差异
+4. 检查 cron 任务配置快照
+5. 检查记忆副本
 
-### 第 2 步：分析（判定严重度）
+输出 JSON：`profiles_found` / `authority_candidates` / `file_drift` / `cron_snapshot` / `memory_copy`
+
+### 第 2 步：分析（agent 判断，不猜）
+
+**探测归脚本、判断归 agent**：
+- 从 `authority_candidates` 里按上下文选真正的权威源（如业务体系选对应 ceo）
+- 按严重度分级：
 
 | 发现 | 级别 | 说明 |
 |------|------|------|
@@ -57,20 +61,17 @@ python3 scripts/drift_check.py
 | 任务快照 ≠ 全局配置 | 🔴 危险 | 任务会静默不跑 |
 | 记忆含明细副本 | 🟡 警告 | 违反副本禁令，需改指向 |
 
-### 第 3 步：对齐（软链 / 修快照）
+### 第 3 步：对齐（自动执行，不需要用户手改）
 
 核心原则：**同一信息只有一个物理位置，其他全部是链接。**
 
 ```bash
-# ① 节点文件对齐为软链（权威源 = AUTHORITY）
-# 每个节点的 skills 目录里，把共享文件改成指向权威目录的符号链接
+# ① 节点文件对齐为软链（agent 自动执行）
 ln -s <authority>/<skill> <node>/skills/<skill>
 
-# ② 任务快照对齐
-# 把任务记录里的 model_snapshot 改为当前全局配置，然后重启调度器
+# ② 任务快照对齐（agent 改 job 记录 + 重启调度器）
 
-# ③ 记忆副本改指向
-# 把"XX 编码是 YY"改为"XX 编码 → 查 <数据源>"
+# ③ 记忆副本改指向（agent 改 memory："查 XX 表" 而非存明细）
 ```
 
 ### 第 4 步：修复（验证闭环）
@@ -93,6 +94,7 @@ ln -s <authority>/<skill> <node>/skills/<skill>
 3. **静默跳过是无报错的**：任务不跑但不报错，靠巡检才能发现——配置切换后必须查快照
 4. **副本 vs 指向的判定**：出现具体编码/金额/费率 = 副本（违规）；"查 XX 表" = 指向（合规）
 5. **巡检要定期跑**：建议并入健康检查（每周一），或单独定时任务
+6. **权威源不猜**：脚本只给候选，agent 按上下文选（多套体系共存时，各体系有自己的权威源）
 
 ## 通用原则（可迁移到任何系统）
 
@@ -107,11 +109,5 @@ ln -s <authority>/<skill> <node>/skills/<skill>
 
 ## 支撑文件
 
-- `scripts/drift_check.py` — 巡检脚本（文件软链 + 任务快照 + 记忆副本），顶部配置区按环境调整
-- `scripts/sync-skills.sh` — 软链同步脚本模板（权威源 → 各节点），按环境调整
-
-## 适配你自己的环境
-
-1. 打开 `drift_check.py`，改 `PROFILES`（你的节点列表）和 `AUTHORITY`（权威目录）
-2. 打开 `sync-skills.sh`，改你的权威源和各节点映射
-3. 定期跑 `drift_check.py`，按输出分级处理
+- `scripts/drift_check.py` — 巡检脚本（自动探测：节点发现 + 权威源候选 + 软链/内容漂移 + cron 快照 + 记忆副本），零配置
+- `scripts/sync-skills.sh` — 软链同步脚本模板（权威源 → 各节点），agent 按需编辑
