@@ -1,6 +1,6 @@
 # powerskills
 
-实战沉淀的可复用 skills —— 多角色信息体系运维经验。
+实战沉淀的可复用 skills 包 —— 多角色信息体系运维经验。
 
 ## 目录
 
@@ -11,7 +11,13 @@
 ## 使用
 
 每个 skill 目录包含 `SKILL.md`（方法论）+ `scripts/`（自动脚本）。
-**零配置**：脚本自动探测你的环境，无需手动适配。复制到环境即可用。
+**零配置**：脚本自动探测你的环境，无需手动适配。复制到你的 skills 目录即可用。
+
+```bash
+git clone https://github.com/jovon-hot/powerskills.git
+# 把需要的 skill 目录复制到你的 agent skills 目录
+cp -r powerskills/drift-management ~/.your-agent/skills/
+```
 
 ## 设计原则
 
