@@ -106,3 +106,4 @@ session_reset:
 ## 支撑文件
 
 - `scripts/token_health_check.py` — 数据收集脚本（零配置自动探测，输出 JSON）
+- `prompt.md` — 纯提示词方案（无脚本，丢给任何长会话 AI 即可用同一套方法论）
